@@ -1,2 +1,3 @@
 # lisp
-lisp projectsd
+
+A joint repository for learning lisp.
