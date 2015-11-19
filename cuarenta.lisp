@@ -1,3 +1,5 @@
+;; Cuarenta card game
+
 (defparameter suits (list 'D 'H 'S 'C))
 
 (defparameter face-values (list 1 2 3 4 5 6 7 8 9 10 11 12 13))
@@ -54,9 +56,25 @@
 	(and (= (card-value c1) (card-value c2))
 		 (eq (card-suit c1) (card-suit c2))))
 
-(defun steal-cards! (cards &optional (pile-of-cards *table*))
+(defun remove-cards (cards pile-of-cards)
 	(dolist (card cards)
-		(delete-if (lambda (c) (cards-equal c card)) pile-of-cards)))
+		(setf pile-of-cards (remove-if (lambda (c) (cards-equal c card)) pile-of-cards)))
+	pile-of-cards)
+
+(defun remove-cards-from-table (cards))
+	(remove-cards cards *table*))
+
+(defun place-card (card pile-of-cards)
+	(append (list card) pile-of-cards))
+
+(defun place-card-on-table (cards)
+	(place-card card *table*))
+
+(defun verify-capture-by-addition (players-card ))
+
+; (defun equals)
+
+; (defun run)
 
 (defun deal-random-cards (n)
 	(deal-cards! n (shuffle-deck (new-deck-of-cards))))
@@ -82,10 +100,10 @@
 (defun turn ()
 	(multiple-value-bind (action cards) (prompt-player)
 		(cond 
-			((eq action 'STEAL) (progn (steal-cards cards) (turn)))
-			((eq action 'MATCH) (capture-cards cards))
-			((eq action 'ADD) (capture-cards cards))
-			((eq action 'PLACE) (place-card-on-table cards)))))
+			((eq action 'STEAL) (progn (setf *table* (remove-cards-from-table cards)) (turn)))
+			((eq action 'MATCH) (setf *table* (remove-cards-from-table cards)))
+			((eq action 'ADD) (setf *table* (remove-cards-from-table cards)))
+			((eq action 'PLACE) (setf *table* (place-card-on-table card))))))
 
 
 
