@@ -13,7 +13,7 @@
 
 
 
-(defvar persistent-key "22e225b597d7e2d9e948bca6e61b6977968eb03c")
+(defvar persistent-key "{enter-key-here}")
 (defvar *debug* nil)
 (defvar base-url "https://api.stockfighter.io/ob/api")
 (defvar heart-beat-url (concatenate 'string base-url "/heartbeat"))
