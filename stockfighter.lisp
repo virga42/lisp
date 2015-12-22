@@ -1,7 +1,9 @@
+(defvar persistent-key "{enter-key-here}")
 (defvar first-time-loadp t)
 (if first-time-loadp
 	(progn
 		(load "/home/alex/quicklisp/setup.lisp")
+		(load "/home/alex/Documents/lisp/my_key.lisp")
 		(sleep 1)
 		(ql:quickload :drakma)
 		(ql:quickload :cl-json)
@@ -13,7 +15,6 @@
 
 
 
-(defvar persistent-key "{enter-key-here}")
 (defvar *debug* nil)
 (defvar base-url "https://api.stockfighter.io/ob/api")
 (defvar heart-beat-url (concatenate 'string base-url "/heartbeat"))
@@ -133,7 +134,8 @@
 		(if v v 0)))
 
 (defun get-quantity-from-order (order)
-	(get-value-in-list ':QTY order))
+	(let ((v (get-value-in-list ':QTY order)))
+		(if v v 0)))
 
 (defun make-order-for-cheapest-in-order-book (order-book account)
 	(let* ((asks (get-asks-from-order-book order-book))
@@ -160,6 +162,18 @@
 (defun get-time-from-order (order-response)
 	(local-time:parse-timestring (get-value-in-list ':TS order-response)))
 
+(defun get-current-orders (venue account stock)
+	(get-value-in-list ':ORDERS 
+		(get-status-on-all-orders-for-stock venue account stock)))
+
+(defun get-total-orders-filled (venue account stock)
+	(loop for order in (get-current-orders venue account stock)
+		sum (get-value-in-list ':TOTAL-FILLED order)))
+
+(defun get-total-orders-requested (venue account stock)
+	(loop for order in (get-current-orders venue account stock)
+		sum (get-quantity-from-order order)))
+
 (defun current-time ()
 	(local-time:now))
 	
@@ -184,20 +198,86 @@
 					(pretty-print-order-response order-response)
 					))))
 
-(defun pretty-print-order-response (order-response)
+(defun stock-to-string (order-response)
 	(let ((stock (get-stock-in-order order-response))
-				(quantity (get-quantity-from-order order-response))
-				(price (get-price-from-order order-response)))			
-		(if (order-openp order-response)
-			(print #?"${stock}: ${quantity}@${price}....OPEN")
-			(print #?"${stock}: ${quantity}@${price}....CLOSED"))))
-
-; (defun level2 ()
-; 	(let ((shares-purchased 0)
-; 				(total-price 0))
-; 		(do (
+			(quantity (get-quantity-from-order order-response))
+			(price (get-price-from-order order-response)))			
+			#?"${stock}: ${quantity}@${price}"))
 
 
+(defun pretty-print-order-response (order-response)		
+		(let ((stock-string (stock-to-string order-response)))
+			(if (order-openp order-response)
+				(print #?"${stock-string}....OPEN")
+				(print #?"${stock-string}....CLOSED"))))
+
+(defun order-filledp (order-response)
+	(> (get-value-in-list ':TOTAL-FILLED order-response) 0))
+
+(defun begin-buy (order fn-buy fn-on-buy fun-on-decline)
+	(let* ((pause-interval .2)
+				 (max-retries 5)
+		 		 (order-response (funcall fn-buy order)))
+		(pretty-print-order-response order-response)
+		(when (order-openp order-response)
+			(do ((tries 1 (+ i 1))
+					 (order-response (get-order-status order-response) (get-order-status order-response)))
+				  ((> tries max-retries) (not (order-openp order-response)))
+				  (pretty-print-order-response order-response)
+				  (sleep pause-interval))
+			(if (order-filledp order-response)
+				(funcall fn-on-buy order-response)
+				(funcall fun-on-decline order-response)))))
+
+
+(defun print-filled-order (order-response)
+	(let ((stock-string (stock-to-string order-response)))
+		(print #?"${stock-string}....FILLED")))
+
+(defun print-unfilled-order (order-response)
+	(let ((stock-string (stock-to-string order-response)))
+		(print #?"${stock-string}....UNFILLED")))
+
+
+(defun generate-buy-function (should-buyp)
+	(lambda (order) (if (funcall should-buyp order)
+										  (place-order order))))
+
+(defun generate-orders-function (venue stock account)
+	(lambda () 
+		(make-order-for-cheapest-from-quote (get-quote venue stock) account)))
+
+
+(defun difference-between-request-and-purchased (venue account stock)
+	(- (get-total-orders-requested venue account stock) 
+		 (get-total-orders-filled venue account stock)))
+
+		
+; (defun filter-on-open-orders (orders)
+; 	(remove-if (
+
+; (defun calculate-quantity-required (goal-quantity venue account stock)
+; 	(if (= goal-quantity (get-total-orders-filled venue account stock))
+; 		0
+
+
+(defun beat-level2 (venue account stock)
+	(let ((total-quantity-to-buy 1000)
+				(max-price 10000))				
+		(do ((qty-remaining (- total-quantity-to-buy (difference-between-request-and-purchased venue account stock))
+												(- total-quantity-to-buy (difference-between-request-and-purchased venue account stock))))
+				((<= qty-remaining 0))
+				(print #?"Remaining: ${qty-remaining}")
+				(let ((order (make-order-for-cheapest-from-quote (get-quote venue stock) account)))
+					(if (> (get-quantity-from-order order) qty-remaining)
+							(update-order order ':qty qty-remaining))
+					(begin-buy 
+						order 
+						(generate-buy-function
+								(lambda (o) (>= max-price (get-price-from-order o))))
+						'print-filled-order
+						'print-unfilled-order)
+					(sleep .5)))))
 
 
 
@@ -209,9 +289,9 @@
 (setf test-order-type "limit")
 (setf test-price 100)
 
-(setf account "TFB80121020")
-(setf venue "SIOMEX")
-(setf stock "MFM")
+(setf account "SMH87162178")
+(setf venue "KCTEX")
+(setf stock "MPI")
 (setf shares-to-buy 100000)
 (setf order-type "limit")
 (setf price 4600)
